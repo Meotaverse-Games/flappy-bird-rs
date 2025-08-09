@@ -3,7 +3,6 @@ use bevy::prelude::*;
 #[derive(Component)]
 pub struct Background;
 
-// components.rs
 #[derive(Component)]
 pub struct Ground;
 
@@ -24,10 +23,13 @@ pub struct Score;
 #[derive(Component)]
 pub struct Bird{
     pub timer: Timer,
+    pub velocity: f32
 }
 
 #[derive(Component)]
-pub struct TopPipe;
+pub struct TopPipe{
+    pub passed: bool,
+}
 
 #[derive(Component)]
 pub struct BottomPipe;

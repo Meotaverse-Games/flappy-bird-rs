@@ -38,16 +38,19 @@ pub fn setup(mut commands:Commands,
     commands.spawn((SpriteBundle {
         texture: asset_server.load("getready.png"),
         transform: align(174., 160.,0.,0.1,0.65,3.),
+        visibility: Visibility::Visible,
         ..default()
     }, GetReady));
     commands.spawn((SpriteBundle {
         texture: asset_server.load("tap.png"),
         transform: align(174., 160.,0.,-0.5,0.65,3.),
+        visibility:Visibility::Visible,
         ..default()
     },TextureAtlas {
         index: 0,
         layout: texture_atlas_layouts.add(TextureAtlasLayout::from_grid(UVec2::new(118, 36),2,1,None,None,)),
-    }, Tap {
+    },
+    Tap {
         timer:Timer::from_seconds(0.2, TimerMode::Repeating)
     }));
     commands.spawn((SpriteBundle {
@@ -79,9 +82,10 @@ pub fn setup(mut commands:Commands,
         layout: texture_atlas_layouts.add(TextureAtlasLayout::from_grid(UVec2::new(34, 24),3,1,None,None,)),
     },Bird {
         timer: Timer::from_seconds(0.2, TimerMode::Repeating),
+        velocity: 0.
     }));
     for i in 0..5 {
-        let dist = i as f32 * 200.;
+        let dist = i as f32 * 300.;
         let (bottom,top) = random_pipe_position();
         commands.spawn((SpriteBundle {
             texture: asset_server.load("pipe.png"),
@@ -101,6 +105,6 @@ pub fn setup(mut commands:Commands,
                 ..Default::default()
             },
             ..default()
-        },TopPipe));
+        },TopPipe { passed:false }));
     }
 }
