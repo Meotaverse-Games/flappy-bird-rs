@@ -4,12 +4,14 @@ use crate::prefs::WINDOW_WIDTH;
 use crate::resources::*;
 use crate::utils::random_pipe_position;
 
-pub fn animate_tap(time: Res<Time>, mut query: Query<(&mut Tap, &mut TextureAtlas)>) {
-    for (mut bird, mut texture_atlas) in query.iter_mut() {
+pub fn animate_tap(time: Res<Time>, mut query: Query<(&mut Tap, &mut Sprite)>) {
+    for (mut tap, mut sprite) in query.iter_mut() {
         let delta = time.delta();
-        bird.timer.tick(delta);
-        if bird.timer.finished() {
-            texture_atlas.index = if texture_atlas.index == 1 { 0 } else { 1 };
+        tap.timer.tick(delta);
+        if tap.timer.finished() {
+            if let Some(texture_atlas) = sprite.texture_atlas.as_mut() {
+                texture_atlas.index ^= 1;
+            }
         }
     }
 }
@@ -18,31 +20,37 @@ pub fn move_background(time: Res<Time>, mut query: Query<&mut Transform, With<Ba
     let mut background_transform = query.single_mut();
     let delta = time.delta().as_secs_f32();
     let delta_x = 20. * delta;
-    background_transform.translation.x -= delta_x;
-    if background_transform.translation.x < -276.*2. {
-        background_transform.translation.x = 0.;
+    if let Ok(pos) = background_transform.as_mut() {
+        pos.translation.x -= delta_x;
+        if pos.translation.x < -276.*2. {
+            pos.translation.x = 0.;
+        }
     }
 }
 pub fn move_ground(time: Res<Time>, mut query: Query<&mut Transform, With<Ground>>) {
     let mut ground_transform = query.single_mut();
     let delta = time.delta().as_secs_f32();
     let delta_x = 150. * delta;
-    ground_transform.translation.x -= delta_x;
-    if ground_transform.translation.x < -276.*2. {
-        ground_transform.translation.x = 0.;
+    if let Ok(pos) = ground_transform.as_mut() {
+        pos.translation.x -= delta_x;
+        if pos.translation.x < -276.*2. {
+            pos.translation.x = 0.;
+        }
     }
 }
 
-pub fn animate_bird(time: Res<Time>, mut query: Query<(&mut Bird, &mut TextureAtlas)>) {
-    for (mut bird, mut texture_atlas) in query.iter_mut() {
+pub fn animate_bird(time: Res<Time>, mut query: Query<(&mut Bird, &mut Sprite)>) {
+    for (mut bird, mut sprite) in query.iter_mut() {
         let delta = time.delta();
         bird.timer.tick(delta);
         if bird.timer.finished() {
-            texture_atlas.index = if texture_atlas.index == 2 {
-                0
-            } else {
-                texture_atlas.index + 1
-            };
+            if let Some(texture_atlas) = sprite.texture_atlas.as_mut() {
+                texture_atlas.index = if texture_atlas.index == 2 {
+                    0
+                } else {
+                    texture_atlas.index + 1
+                };
+            }
         }
     }
 }
@@ -84,8 +92,9 @@ pub fn start_game(
 
     game.state = GameState::Active;
 
-    let mut gameover_visible = gameover_query.single_mut();
-    *gameover_visible = Visibility::Hidden;
+    if let Ok(mut gameover_visible) = gameover_query.single_mut() {
+        *gameover_visible = Visibility::Hidden;
+    }
 
     for (mut bird, mut transform) in bird_query.iter_mut() {
         bird.velocity = 0.;
@@ -93,10 +102,12 @@ pub fn start_game(
         transform.rotation = Quat::from_rotation_z(0.);
     }
 
-    let mut tap_visibility = tap_query.single_mut();
-    *tap_visibility = Visibility::Hidden;
-    let mut getready_visibility = getready_query.single_mut();
-    *getready_visibility = Visibility::Hidden;
+    if let Ok(mut tap_visible) = tap_query.single_mut() {
+        *tap_visible = Visibility::Hidden;
+    }
+    if let Ok(mut getready_visible) = getready_query.single_mut() {
+        *getready_visible = Visibility::Hidden;
+    }
 }
 
 pub fn gravity(
@@ -130,14 +141,14 @@ pub fn gravity(
             bird.velocity = 0.;
 
             game.state = GameState::GameOver;
-            let mut gameover_visible = gameover_query.single_mut();
-            *gameover_visible = Visibility::Visible;
+            if let Ok(mut gameover_visible) = gameover_query.single_mut(){
+                *gameover_visible = Visibility::Visible;
+            }
 
-            commands.spawn(AudioBundle {
-                source: asset_server.load("sfx/hit.ogg"),
-                settings: PlaybackSettings::DESPAWN,
-                ..default()
-            });
+            commands.spawn((
+                AudioPlayer::new(asset_server.load("sfx/hit.ogg")),
+                PlaybackSettings::DESPAWN
+            ));
         }
     }
 }
@@ -152,11 +163,10 @@ pub fn jump(
         return;
     }
  
-    commands.spawn(AudioBundle {
-        source: asset_server.load("sfx/wing.ogg"),
-        settings: PlaybackSettings::DESPAWN,
-        ..default()
-    });
+    commands.spawn((
+        AudioPlayer::new(asset_server.load("sfx/wing.ogg")),
+        PlaybackSettings::DESPAWN
+    ));
 
     for mut bird in query.iter_mut() {
         bird.velocity = 220.0;
@@ -168,7 +178,7 @@ pub fn pipes(
     mut top_pipe_query: Query<(&mut TopPipe, &mut Transform)>,
     mut bottom_pipe_query: Query<(&BottomPipe, &mut Transform), Without<TopPipe>>,
     mut bird_query: Query<&Transform, (With<Bird>, Without<BottomPipe>, Without<TopPipe>)>,
-    mut game_over_query: Query<&mut Visibility, With<GameOver>>,
+    mut gameover_query: Query<&mut Visibility, With<GameOver>>,
     asset_server: Res<AssetServer>,
     mut game: ResMut<Game>,
     mut commands: Commands,
@@ -225,13 +235,14 @@ pub fn pipes(
     for bird_transform in bird_query.iter_mut() {
         let mut game_over = || {
             game.state = GameState::GameOver;
-            *game_over_query.single_mut() = Visibility::Visible;
+            if let Ok(mut gameover_visible) = gameover_query.single_mut() {
+                *gameover_visible = Visibility::Visible;
+            }
 
-            // Play game over sound
-            commands.spawn(AudioBundle {
-                source: asset_server.load("sfx/hit.ogg"),
-                settings: PlaybackSettings::DESPAWN,
-            });
+            commands.spawn((
+                AudioPlayer::new(asset_server.load("sfx/hit.ogg")),
+                PlaybackSettings::DESPAWN
+            ));
         };
 
         for (_, transform) in top_pipe_query.iter_mut() {
@@ -265,23 +276,25 @@ pub fn score(
                 game.score += 1;
                 upper_pipe.passed = true;
  
-                commands.spawn(AudioBundle {
-                    source: asset_server.load("sfx/point.ogg"),
-                    settings: PlaybackSettings::DESPAWN,
-                });
+                commands.spawn((
+                    AudioPlayer::new(asset_server.load("sfx/point.ogg")),
+                    PlaybackSettings::DESPAWN
+                ));
             }
         }
     }
 }
 
-pub fn render_score(game: Res<Game>, mut query: Query<&mut TextureAtlas, With<Score>>) {
+pub fn render_score(game: Res<Game>, mut query: Query<&mut Sprite, With<Score>>) {
     let score_string = format!("{:03}", game.score); // Ensure at least 3 digits, pad with zeros
     let score_digits: Vec<usize> = score_string
         .chars()
         .map(|c| c.to_digit(10).unwrap() as usize)
         .collect();
  
-    for (digit, mut texture_atlas) in score_digits.iter().zip(query.iter_mut()) {
-        texture_atlas.index = *digit;
+    for (digit, mut sprite) in score_digits.iter().zip(query.iter_mut()) {
+        if let Some(texture_atlas) = sprite.texture_atlas.as_mut() {
+            texture_atlas.index = *digit;
+        }
     }
 }
